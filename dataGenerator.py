@@ -7,6 +7,13 @@ from datetime import datetime
 import io
 import traceback
 
+# Try to import pyperclip for clipboard functionality
+try:
+    import pyperclip
+    CLIPBOARD_AVAILABLE = True
+except ImportError:
+    CLIPBOARD_AVAILABLE = False
+
 # Try to import xlsxwriter, but don't fail if it's not available
 try:
     import xlsxwriter
@@ -848,11 +855,26 @@ Email: {selected_persona['Email']}
 Phone: {selected_persona['Phone']}
 Address: {selected_persona['Full Address']}"""
                 
+                # Text area for displaying persona info
                 st.text_area(
                     "Copy this:",
                     value=formatted_text,
-                    height=120
+                    height=150,
+                    key="single_copy_area"
                 )
+                
+                # Copy button below the text box
+                if st.button("Copy one person information", key="copy_single_btn", use_container_width=True):
+                    if CLIPBOARD_AVAILABLE:
+                        try:
+                            pyperclip.copy(formatted_text)
+                            st.success("✓ Copied to clipboard!")
+                        except Exception as e:
+                            st.warning("Could not copy to clipboard. Please select the text manually and copy.")
+                            st.info("For automatic copy, run this app locally with pyperclip installed: pip install pyperclip")
+                    else:
+                        st.warning("Automatic clipboard copy not available. Please select the text above and press Ctrl+C (or Cmd+C on Mac)")
+                        st.info("For automatic copy, install pyperclip: pip install pyperclip")
             
             with col2:
                 st.markdown("**Bulk Copy**")
@@ -866,7 +888,8 @@ Address: {selected_persona['Full Address']}"""
                 st.text_area(
                     f"First {num_to_copy} personas:",
                     value=bulk_text,
-                    height=120
+                    height=200,
+                    key="bulk_personas_text"
                 )
             
             st.markdown("---")
@@ -1055,3 +1078,4 @@ Address: {selected_persona['Full Address']}"""
 
 if __name__ == "__main__":
     main()
+    
