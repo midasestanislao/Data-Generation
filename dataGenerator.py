@@ -5,13 +5,61 @@ import json
 import hashlib
 from datetime import datetime
 import io
+import traceback
+
+# Try to import xlsxwriter, but don't fail if it's not available
+try:
+    import xlsxwriter
+    EXCEL_AVAILABLE = True
+except ImportError:
+    EXCEL_AVAILABLE = False
+    
+# Try openpyxl as alternative
+try:
+    import openpyxl
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 # Page configuration
 st.set_page_config(
-    page_title="Test Persona Generator - All 50 States",
-    page_icon="👤",
-    layout="wide"
+    page_title="Test Persona Generator",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# Minimal professional CSS
+st.markdown("""
+    <style>
+    .main {
+        padding: 1rem;
+    }
+    h1 {
+        color: #1f2937;
+        font-weight: 500;
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 0.5rem;
+    }
+    .stButton>button {
+        background-color: #4b5563;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+    }
+    .stButton>button:hover {
+        background-color: #374151;
+    }
+    .metric-row {
+        background-color: #f9fafb;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 0.5rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 class PersonaGenerator:
     """Generate test personas with public place addresses and guaranteed uniqueness"""
@@ -46,12 +94,12 @@ class PersonaGenerator:
         
         # Duplicate tracking with multiple strategies
         self.unique_tracker = {
-            'full_names': set(),      # Track full name combinations
-            'emails': set(),           # Track email addresses
-            'phones': set(),           # Track phone numbers
-            'addresses': set(),        # Track full addresses
-            'name_hashes': set(),      # Track hashed combinations for extra safety
-            'person_hashes': set()     # Track complete persona hashes
+            'full_names': set(),
+            'emails': set(),
+            'phones': set(),
+            'addresses': set(),
+            'name_hashes': set(),
+            'person_hashes': set()
         }
         
         # Statistics tracking
@@ -649,12 +697,9 @@ class PersonaGenerator:
     def generate_multiple_personas(self, count, state=None):
         """Generate multiple unique personas"""
         personas = []
+        
         for i in range(count):
             personas.append(self.generate_persona(state))
-            
-            # Progress indicator for large datasets
-            if (i + 1) % 100 == 0:
-                print(f"Generated {i + 1} personas...")
         
         return personas
     
@@ -673,8 +718,9 @@ class PersonaGenerator:
 
 # Streamlit App
 def main():
-    st.title(" Test Persona Generator - All US")
-    st.markdown("Generate test personas with public place addresses across all US states with **guaranteed uniqueness**")
+    # Clean header
+    st.title("Test Persona Generator")
+    st.markdown("Generate test personas with public place addresses across all 50 US states")
     
     # Initialize generator in session state
     if 'generator' not in st.session_state:
@@ -684,76 +730,76 @@ def main():
     
     # Sidebar configuration
     with st.sidebar:
-        st.header("⚙️ Configuration")
+        st.header("Configuration")
         
-        # Number of personas
         num_personas = st.number_input(
             "Number of Personas",
             min_value=1,
             max_value=5000,
             value=10,
             step=1,
-            help="Select how many test personas to generate (max 5000 for performance)"
+            help="Maximum 5000 for performance"
         )
         
-        # State selection - now with all 50 states
-        states = ['Mixed'] + sorted(list(generator.public_places.keys()))
+        states = ['Mixed (All States)'] + sorted(list(generator.public_places.keys()))
         selected_state = st.selectbox(
-            "Select State",
+            "Location",
             options=states,
-            help="Choose a specific state or 'Mixed' for variety across all 50 states"
+            help="Select specific state or mixed"
         )
         
-        # Generate button
-        generate_button = st.button("🎲 Generate Personas", type="primary", use_container_width=True)
+        if selected_state == 'Mixed (All States)':
+            selected_state = 'Mixed'
         
-        st.divider()
+        generate_button = st.button(
+            "Generate Personas",
+            type="primary",
+            use_container_width=True
+        )
         
-        # Uniqueness settings
-        with st.expander("🔒 Uniqueness Guarantee"):
-            st.info(
-                "**How Uniqueness is Ensured:**\n\n"
-                "• **Names**: No duplicate full names\n\n"
-                "• **Emails**: All unique addresses\n\n"
-                "• **Phones**: No duplicate numbers\n\n"
-                "• **Hash Verification**: MD5 hash checking\n\n"
-                "• **Collision Handling**: Auto-regeneration\n\n"
-                "• **Fallback System**: Guaranteed uniqueness"
-            )
+        st.markdown("---")
+        
+        # Information sections
+        with st.expander("Features"):
+            st.markdown("""
+            - All 50 US states
+            - 250+ public places
+            - Real area codes
+            - 100% unique data
+            - Public institutions only
+            """)
+        
+        with st.expander("Uniqueness"):
+            st.markdown("""
+            **Guaranteed unique:**
+            - Full names
+            - Email addresses  
+            - Phone numbers
+            - MD5 hash verification
+            """)
             
-            if st.button("Reset Tracking", help="Clear all uniqueness tracking"):
+            if st.button("Reset Tracking"):
                 st.session_state['generator'] = PersonaGenerator()
-                st.success("Tracking reset! Ready for new unique data.")
-        
-        st.divider()
-        
-        # Information section
-        st.info(
-            "**Features:**\n\n"
-            "• All 50 US states included\n\n"
-            "• 250+ public places\n\n"
-            "• Real area codes per state\n\n"
-            "• 100% unique data guaranteed\n\n"
-            "• Public institutions only\n\n"
-            "• Safe for testing"
-        )
+                st.success("Tracking reset")
     
     # Main content area
     if generate_button:
-        with st.spinner(f"Generating {num_personas} unique personas..."):
-            # Generate personas
-            personas = generator.generate_multiple_personas(
-                num_personas, 
-                selected_state if selected_state != 'Mixed' else None
-            )
+        try:
+            with st.spinner(f"Generating {num_personas} personas..."):
+                personas = generator.generate_multiple_personas(
+                    num_personas, 
+                    selected_state if selected_state != 'Mixed' else None
+                )
+                
+                df = pd.DataFrame(personas)
+                st.session_state['generated_data'] = df
+                st.session_state['timestamp'] = datetime.now()
+                st.session_state['uniqueness_report'] = generator.get_uniqueness_report()
             
-            # Convert to DataFrame
-            df = pd.DataFrame(personas)
-            
-            # Store in session state
-            st.session_state['generated_data'] = df
-            st.session_state['timestamp'] = datetime.now()
-            st.session_state['uniqueness_report'] = generator.get_uniqueness_report()
+            st.success(f"Generated {len(personas)} unique personas")
+                
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
     
     # Display results
     if 'generated_data' in st.session_state:
@@ -761,231 +807,250 @@ def main():
         timestamp = st.session_state['timestamp']
         uniqueness_report = st.session_state.get('uniqueness_report', {})
         
-        # Summary section
+        # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Total Personas", len(df))
         with col2:
             st.metric("Unique States", df['State'].nunique())
         with col3:
-            st.metric("Uniqueness Rate", uniqueness_report.get('Uniqueness Rate', '100%'))
+            st.metric("Uniqueness", uniqueness_report.get('Uniqueness Rate', '100%'))
         with col4:
-            st.metric("Generated At", timestamp.strftime('%H:%M:%S'))
+            st.metric("Generated", timestamp.strftime('%H:%M:%S'))
         
-        # Display options
-        st.divider()
-        
-        # Tabs for different views
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Data Table", "🔒 Uniqueness Report", "📈 Statistics", "🗺️ By State", "💾 Download"])
+        # Tabs
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "Data & Copy",
+            "Verification",
+            "Analytics",
+            "State View",
+            "Export"
+        ])
         
         with tab1:
-            st.subheader("Generated Personas")
+            # Quick copy section
+            st.subheader("Quick Copy for Call Sim")
             
-            # Display configuration
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**Single Persona**")
+                persona_index = st.selectbox(
+                    "Select:",
+                    range(len(df)),
+                    format_func=lambda x: f"{df.iloc[x]['First Name']} {df.iloc[x]['Last Name']}"
+                )
+                
+                selected_persona = df.iloc[persona_index]
+                
+                formatted_text = f"""Name: {selected_persona['First Name']} {selected_persona['Last Name']}
+Email: {selected_persona['Email']}
+Phone: {selected_persona['Phone']}
+Address: {selected_persona['Full Address']}"""
+                
+                st.text_area(
+                    "Copy this:",
+                    value=formatted_text,
+                    height=120
+                )
+            
+            with col2:
+                st.markdown("**Bulk Copy**")
+                num_to_copy = st.slider("Number:", 1, min(10, len(df)), 3)
+                
+                bulk_text = ""
+                for i in range(num_to_copy):
+                    p = df.iloc[i]
+                    bulk_text += f"{p['First Name']} {p['Last Name']} | {p['Phone']} | {p['Email']}\n{p['Full Address']}\n\n"
+                
+                st.text_area(
+                    f"First {num_to_copy} personas:",
+                    value=bulk_text,
+                    height=120
+                )
+            
+            st.markdown("---")
+            
+            # Data table
+            st.subheader("Full Data")
+            
+            available_columns = df.columns.tolist()
+            default_columns = ['ID', 'First Name', 'Last Name', 'Email', 'Phone', 'Full Address']
+            default_columns = [col for col in default_columns if col in available_columns]
+            
             display_cols = st.multiselect(
-                "Select columns to display",
-                options=df.columns.tolist(),
-                default=['ID', 'First Name', 'Last Name', 'Email', 'Phone', 'Full Address', 'State']
+                "Display columns:",
+                options=available_columns,
+                default=default_columns
             )
             
             if display_cols:
-                st.dataframe(df[display_cols], use_container_width=True)
-            else:
-                st.warning("Please select at least one column to display")
+                st.dataframe(df[display_cols], use_container_width=True, height=400)
         
         with tab2:
-            st.subheader("🔒 Uniqueness Verification Report")
+            st.subheader("Data Verification")
             
-            # Display uniqueness metrics
             col1, col2 = st.columns(2)
             
             with col1:
-                st.metric("Total Generated", uniqueness_report.get('Total Generated', 0))
-                st.metric("Unique Names", uniqueness_report.get('Unique Names', 0))
-                st.metric("Unique Emails", uniqueness_report.get('Unique Emails', 0))
-                st.metric("Unique Phones", uniqueness_report.get('Unique Phones', 0))
+                st.markdown("**Generation Metrics**")
+                for metric, value in {
+                    "Total Generated": uniqueness_report.get('Total Generated', 0),
+                    "Unique Names": uniqueness_report.get('Unique Names', 0),
+                    "Unique Emails": uniqueness_report.get('Unique Emails', 0),
+                    "Unique Phones": uniqueness_report.get('Unique Phones', 0)
+                }.items():
+                    st.markdown(f"- {metric}: **{value:,}**")
             
             with col2:
-                st.metric("Unique Addresses Used", uniqueness_report.get('Unique Addresses Used', 0))
-                st.metric("Collision Attempts", uniqueness_report.get('Collision Attempts', 0))
-                st.metric("Fallback Regenerations", uniqueness_report.get('Fallback Regenerations', 0))
-                st.metric("Success Rate", uniqueness_report.get('Uniqueness Rate', '100%'))
+                st.markdown("**Performance**")
+                for metric, value in {
+                    "Collisions": uniqueness_report.get('Collision Attempts', 0),
+                    "Regenerations": uniqueness_report.get('Fallback Regenerations', 0),
+                    "Success Rate": uniqueness_report.get('Uniqueness Rate', '100%')
+                }.items():
+                    st.markdown(f"- {metric}: **{value}**")
             
-            # Verification tests
-            st.divider()
-            st.subheader("Verification Tests")
+            st.markdown("---")
+            st.markdown("**Uniqueness Tests**")
             
             tests = {
-                'Email Uniqueness': len(df['Email'].unique()) == len(df),
-                'Phone Uniqueness': len(df['Phone'].unique()) == len(df),
-                'Name Uniqueness': len(df[['First Name', 'Last Name']].drop_duplicates()) == len(df),
-                'ID Uniqueness': len(df['ID'].unique()) == len(df)
+                'Emails': len(df['Email'].unique()) == len(df),
+                'Phones': len(df['Phone'].unique()) == len(df),
+                'Names': len(df[['First Name', 'Last Name']].drop_duplicates()) == len(df),
+                'IDs': len(df['ID'].unique()) == len(df)
             }
             
+            all_passed = all(tests.values())
             for test_name, passed in tests.items():
-                if passed:
-                    st.success(f"✅ {test_name}: PASSED")
-                else:
-                    st.error(f"❌ {test_name}: FAILED")
+                st.markdown(f"- {test_name}: {'✓ PASSED' if passed else '✗ FAILED'}")
+            
+            if all_passed:
+                st.success("All uniqueness tests passed")
         
         with tab3:
-            st.subheader("Dataset Statistics")
+            st.subheader("Analytics")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                # State distribution
+                st.markdown("**State Distribution**")
                 state_counts = df['State'].value_counts()
-                st.bar_chart(state_counts)
-                st.caption("Distribution by State")
+                st.bar_chart(state_counts, height=250)
             
             with col2:
-                # Location type distribution
-                location_counts = df['Location Name'].value_counts().head(10)
-                st.bar_chart(location_counts)
-                st.caption("Top 10 Locations Used")
+                st.markdown("**Top Locations**")
+                location_counts = df['Location Name'].value_counts().head(5)
+                st.bar_chart(location_counts, height=250)
             
-            # Additional stats
-            st.divider()
-            st.subheader("Coverage Statistics")
+            st.markdown("---")
             
-            # State coverage
-            total_states = len(generator.state_codes)
-            states_used = df['State'].nunique()
-            
-            coverage_df = pd.DataFrame({
-                'Coverage Area': ['States Used', 'Total Locations', 'Unique Cities', 'Unique ZIP Codes'],
-                'Count': [
-                    f"{states_used}/{total_states}",
-                    df['Location Name'].nunique(),
-                    df['City'].nunique(),
-                    df['ZIP Code'].nunique()
-                ]
-            })
-            st.table(coverage_df)
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("States Used", f"{df['State'].nunique()}/50")
+            with col2:
+                st.metric("Coverage", f"{(df['State'].nunique()/50)*100:.1f}%")
+            with col3:
+                st.metric("Cities", df['City'].nunique())
+            with col4:
+                st.metric("ZIP Codes", df['ZIP Code'].nunique())
         
         with tab4:
-            st.subheader("Personas by State")
+            st.subheader("State View")
             
-            # State selector with count
             state_counts = df['State'].value_counts().to_dict()
-            state_options = [f"{state} ({state_counts.get(state, 0)} personas)" for state in sorted(df['State'].unique())]
             
             selected_state_view = st.selectbox(
-                "Select a state to view",
-                options=state_options
+                "Select State:",
+                options=sorted(df['State'].unique()),
+                format_func=lambda x: f"{x} ({state_counts.get(x, 0)} personas)"
             )
             
-            # Extract state code from selection
-            state_code = selected_state_view.split(' (')[0]
+            state_df = df[df['State'] == selected_state_view]
             
-            state_df = df[df['State'] == state_code]
-            st.write(f"**{len(state_df)} personas in {state_code}**")
+            st.info(f"State: **{selected_state_view}** | Personas: **{len(state_df)}**")
             
-            # Display with pagination for large datasets
-            if len(state_df) > 20:
-                page_size = 20
-                page_num = st.number_input(
-                    f"Page (1-{(len(state_df)-1)//page_size + 1})",
-                    min_value=1,
-                    max_value=(len(state_df)-1)//page_size + 1,
-                    value=1
-                )
-                start_idx = (page_num - 1) * page_size
-                end_idx = min(start_idx + page_size, len(state_df))
-                st.dataframe(
-                    state_df.iloc[start_idx:end_idx][['ID', 'First Name', 'Last Name', 'Email', 'Phone', 'Location Name', 'City']],
-                    use_container_width=True
-                )
-            else:
-                st.dataframe(
-                    state_df[['ID', 'First Name', 'Last Name', 'Email', 'Phone', 'Location Name', 'City']],
-                    use_container_width=True
-                )
+            display_columns = ['ID', 'First Name', 'Last Name', 'Email', 'Phone', 'City']
+            display_columns = [col for col in display_columns if col in state_df.columns]
+            
+            st.dataframe(state_df[display_columns], use_container_width=True, height=400)
         
         with tab5:
-            st.subheader("Download Options")
+            st.subheader("Export Data")
             
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                # CSV download
+                st.markdown("**CSV Format**")
                 csv = df.to_csv(index=False)
                 st.download_button(
-                    label="📥 Download as CSV",
+                    label="Download CSV",
                     data=csv,
-                    file_name=f"test_personas_{timestamp.strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
+                    file_name=f"personas_{timestamp.strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
                 )
             
             with col2:
-                # JSON download
-                json_str = df.to_json(orient='records', indent=2)
-                st.download_button(
-                    label="📥 Download as JSON",
-                    data=json_str,
-                    file_name=f"test_personas_{timestamp.strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
+                st.markdown("**Excel Format**")
+                if EXCEL_AVAILABLE or OPENPYXL_AVAILABLE:
+                    try:
+                        output = io.BytesIO()
+                        engine = 'xlsxwriter' if EXCEL_AVAILABLE else 'openpyxl'
+                        
+                        with pd.ExcelWriter(output, engine=engine) as writer:
+                            df.to_excel(writer, index=False, sheet_name='Personas')
+                            report_df = pd.DataFrame([uniqueness_report])
+                            report_df.to_excel(writer, index=False, sheet_name='Report')
+                        
+                        excel_data = output.getvalue()
+                        
+                        st.download_button(
+                            label="Download Excel",
+                            data=excel_data,
+                            file_name=f"personas_{timestamp.strftime('%Y%m%d_%H%M%S')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    except Exception as e:
+                        st.info("Excel unavailable")
+                else:
+                    st.info("Excel export requires xlsxwriter or openpyxl")
             
             with col3:
-                # Excel download
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df.to_excel(writer, index=False, sheet_name='Personas')
-                    
-                    # Add uniqueness report sheet
-                    report_df = pd.DataFrame([uniqueness_report])
-                    report_df.to_excel(writer, index=False, sheet_name='Uniqueness Report')
-                    
-                excel_data = output.getvalue()
-                
+                st.markdown("**JSON Format**")
+                json_str = df.to_json(orient='records', indent=2)
                 st.download_button(
-                    label="📥 Download as Excel",
-                    data=excel_data,
-                    file_name=f"test_personas_{timestamp.strftime('%Y%m%d_%H%M%S')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    label="Download JSON",
+                    data=json_str,
+                    file_name=f"personas_{timestamp.strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json"
                 )
             
-            # Sample preview
-            st.divider()
-            st.subheader("Sample Data Preview (First 3 Records)")
-            st.json(json.loads(df.head(3).to_json(orient='records')))
+            st.markdown("---")
+            st.markdown("**Preview (first 3 records)**")
+            st.dataframe(df.head(3), use_container_width=True)
     
     else:
-        # Welcome message when no data is generated yet
-        st.info("👆 Use the sidebar to configure and generate test personas")
+        # Welcome screen
+        st.info("Configure settings in the sidebar and click **Generate Personas** to begin")
         
-        # State coverage display
-        with st.expander("📍 Available States (All 50 US States)"):
-            states_list = sorted(list(generator.state_codes.keys()))
-            cols = st.columns(5)
-            for i, state in enumerate(states_list):
-                cols[i % 5].write(f"• {state} ({generator.state_codes[state]})")
+        col1, col2, col3 = st.columns(3)
         
-        # Example section
-        with st.expander("📖 How Uniqueness is Guaranteed"):
+        with col1:
             st.markdown("""
-            **Multi-Layer Uniqueness System:**
-            
-            1. **Primary Tracking**: Direct comparison of names, emails, phones
-            2. **Hash Verification**: MD5 hashing for collision detection
-            3. **Smart Regeneration**: Automatic variation when duplicates detected
-            4. **Fallback System**: Guaranteed unique identifiers as last resort
-            
-            **Collision Handling:**
-            - First attempts use random combinations
-            - On collision, tries alternative patterns
-            - Adds middle initials or numbers if needed
-            - Uses timestamps for ultimate uniqueness
-            
-            **Performance:**
-            - Can generate 5000+ unique personas
-            - Maintains O(1) lookup for duplicate checking
-            - Tracks all generation statistics
+            **100% Unique Data**  
+            Advanced duplicate prevention
+            """)
+        
+        with col2:
+            st.markdown("""
+            **All 50 States**  
+            250+ public locations
+            """)
+        
+        with col3:
+            st.markdown("""
+            **Ethical Testing**  
+            Public institution addresses only
             """)
 
 if __name__ == "__main__":
